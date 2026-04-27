@@ -4,34 +4,39 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Script from "next/script";
 
-<Script
-  src="https://js.paystack.co/v1/inline.js"
-  strategy="lazyOnload"
-/>
 export default function Home() {
   const [pos, setPos] = useState({ x: 0, y: 0 });
-  const [form, setForm] = useState({
-  first_name: "",
-  last_name: "",
+ const [form, setForm] = useState({
+  firstName: "",
+  lastName: "",
   location: "",
   phone: "",
   email: "",
   package: "",
 });
+const [popup, setPopup] = useState({
+  show: false,
+  message: "",
+  type: "success", // success | error
+});
+const showPopup = (message: string, type = "success") => {
+  setPopup({ show: true, message, type });
 
+  setTimeout(() => {
+    setPopup({ show: false, message: "", type: "success" });
+  }, 3000);
+};
   useEffect(() => {
     const move = (e: MouseEvent) => {
       const x = (e.clientX / window.innerWidth - 0.5) * 40;
       const y = (e.clientY / window.innerHeight - 0.5) * 40;
+      
       setPos({ x, y });
     };
 
     window.addEventListener("mousemove", move);
     return () => window.removeEventListener("mousemove", move);
   }, []);
-      "use client";
-
-
 
   const [packageType, setPackageType] = useState("");
   const [amount, setAmount] = useState(0);
@@ -43,17 +48,25 @@ export default function Home() {
     if (type === "couple") setAmount(9000);
     if (type === "group") setAmount(20000);
   };
-useEffect(() => {
-  const script = document.createElement("script");
-  script.src = "https://js.paystack.co/v1/inline.js";
-  script.async = true;
-  document.body.appendChild(script);
-}, []);
+  const checkDuplicate = async () => {
+  const { data, error } = await supabase
+    .from("registrations")
+    .select("id")
+    .eq("email", form.email)
+    .eq("package", form.package);
+
+  if (error) {
+    console.log("Duplicate check error:", error);
+    return false;
+  }
+
+  return data && data.length > 0;
+};
 const payWithPaystack = () => {
   const PaystackPop = (window as any).PaystackPop;
 
   if (!PaystackPop) {
-    alert("Payment system still loading, try again...");
+    alert("Paystack not loaded");
     return;
   }
 
@@ -63,30 +76,56 @@ const payWithPaystack = () => {
     amount: amount * 100,
     ref: "" + new Date().getTime(),
 
-    callback: async function (response: any) {
-      const { error } = await supabase.from("registrations").insert([
-        {
-          ...form,
-          amount,
-          reference: response.reference,
-        },
-      ]);
+    // ❌ REMOVE async
+    callback: function (response: any) {
+      console.log("Payment success:", response);
 
-      if (!error) {
-        window.location.href = "/success";
-      } else {
-        alert("Saved failed after payment");
-      }
+      // 👇 handle async INSIDE
+      saveToDatabase(response);
     },
 
     onClose: function () {
-      console.log("Payment cancelled");
+      console.log("Payment closed");
     },
   });
 
   handler.openIframe();
 };
+
+
+
+const saveToDatabase = async (response: any) => {
+  const { error } = await supabase.from("registrations").insert([
+    {
+      first_name: form.firstName,
+      last_name: form.lastName,
+      location: form.location,
+      email: form.email,
+      package: form.package,
+      amount: amount,
+      reference: response.reference,
+    },
+  ]);
+
+  if (!error) {
+    // 🔥 SEND EMAIL
+    await fetch("/api/send-email", {
+      method: "POST",
+      body: JSON.stringify({
+        email: form.email,
+        firstName: form.firstName,
+      }),
+    });
+
+    // ✅ SHOW POPUP
+    showPopup("Payment successful 🎉 Confirmation sent to email!");
+  } else {
+    showPopup("Payment successful but failed to save data", "error");
+  }
+};
+
   return (
+    
     <main className="bg-black text-white min-h-screen overflow-hidden">
 
       <section className="relative min-h-[65vh] md:min-h-[80vh] flex flex-col items-center justify-center text-center px-4 md:px-6 overflow-hidden">
@@ -302,7 +341,7 @@ const payWithPaystack = () => {
 
   </div>
 </section>
-    <section className="relative py-10 px-6 bg-[#f4f4f4] text-black overflow-hidden">
+   <section className="relative py-10 px-6 bg-[#f4f4f4] text-black overflow-hidden">
 
   {/* 🔴 Arsenal watermark */}
   <div className="absolute inset-0 flex items-center justify-center opacity-[0.035]">
@@ -317,73 +356,69 @@ const payWithPaystack = () => {
 
   <div className="relative max-w-lg mx-auto">
 
-    <h2 className="px-5 text-center text-2xl md:text-4xl font-extrabold text-center mb-8">
+    <h2 className="px-5 text-center text-2xl md:text-4xl font-extrabold mb-8">
       Register for Watch Party ⚽
     </h2>
 
-    {/* CARD */}
     <div className="bg-white rounded-xl p-6 md:p-7 shadow-lg border border-gray-200">
 
       <form className="space-y-4">
 
-        {/* GRID (reduces height) */}
+        {/* NAME */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input
+            placeholder="First Name"
+            className="input"
+            onChange={(e) =>
+              setForm({ ...form, firstName: e.target.value })
+            }
+          />
 
           <input
-  placeholder="First Name"
-  className="input"
-  onChange={(e) =>
-    setForm({ ...form, first_name: e.target.value })
-  }
-/>
-
-          <input
-  placeholder="Surname"
-  className="input"
-  onChange={(e) =>
-    setForm({ ...form, last_name: e.target.value })
-  }
-/>
-
+            placeholder="Surname"
+            className="input"
+            onChange={(e) =>
+              setForm({ ...form, lastName: e.target.value })
+            }
+          />
         </div>
 
+        {/* LOCATION + PHONE */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input
+            placeholder="Location"
+            className="input"
+            onChange={(e) =>
+              setForm({ ...form, location: e.target.value })
+            }
+          />
 
           <input
-  placeholder="Location"
-  className="input"
-  onChange={(e) =>
-    setForm({ ...form, location: e.target.value })
-  }
-/>
-
-          <input
-  placeholder="Phone Number"
-  className="input"
-  onChange={(e) =>
-    setForm({ ...form, phone: e.target.value })
-  }
-/>
-
+            placeholder="Phone Number"
+            className="input"
+            onChange={(e) =>
+              setForm({ ...form, phone: e.target.value })
+            }
+          />
         </div>
 
-        {/* EMAIL (you missed this) */}
+        {/* EMAIL */}
         <input
-  placeholder="Email Address"
-  className="input"
-  onChange={(e) =>
-    setForm({ ...form, email: e.target.value })
-  }
-/>
+          placeholder="Email Address"
+          className="input"
+          onChange={(e) =>
+            setForm({ ...form, email: e.target.value })
+          }
+        />
 
         {/* PACKAGE */}
         <select
-  className="input"
-  onChange={(e) => {
-    handlePackageChange(e.target.value);
-    setForm({ ...form, package: e.target.value });
-  }}
->
+          className="input"
+          onChange={(e) => {
+            handlePackageChange(e.target.value);
+            setForm({ ...form, package: e.target.value });
+          }}
+        >
           <option value="">Select Package</option>
           <option value="single">Single — ₦5,000</option>
           <option value="couple">Couple — ₦9,000</option>
@@ -398,28 +433,34 @@ const payWithPaystack = () => {
         />
 
         {/* BUTTON */}
-       <button
-  type="button"
-  onClick={(e) => {
-    e.preventDefault();
+        <button
+          type="button"
+        onClick={async (e) => {
+  e.preventDefault();
 
-    if (!form.first_name || !form.email || !amount) {
-      alert("Please fill all required fields");
-      return;
-    }
+  const { data: existing } = await supabase
+    .from("registrations")
+    .select("*")
+    .eq("email", form.email)
+    .eq("package", form.package);
 
-    payWithPaystack();
-  }}
-  className="w-full bg-[#EF0107] hover:bg-red-700 transition py-3 text-lg font-semibold rounded-lg text-white"
->
-  Proceed to Payment
-</button>
+  if (existing && existing.length > 0) {
+    showPopup("You already registered for this package.", "error");
+    return;
+  }
+
+  payWithPaystack();
+}}
+          className="w-full bg-[#EF0107] hover:bg-red-700 transition py-3 text-lg font-semibold rounded-lg text-white"
+        >
+          Proceed to Payment
+        </button>
 
       </form>
     </div>
   </div>
-  
 </section>
+   
 {/* ================= HASHTAGS ================= */}
   <div className="border-t border-[#EF0107]/40 pt-6">
 
@@ -428,6 +469,17 @@ const payWithPaystack = () => {
       </p>
 
     </div>
+    {popup.show && (
+  <div className="fixed top-6 right-6 z-50 animate-fadeIn">
+    <div
+      className={`px-6 py-4 rounded-lg shadow-lg text-white ${
+        popup.type === "success" ? "bg-green-600" : "bg-red-600"
+      }`}
+    >
+      {popup.message}
+    </div>
+  </div>
+)}
     </main>
   );
 }

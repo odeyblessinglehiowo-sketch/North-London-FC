@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 
-// ✅ Define your table shape here
 type Database = {
   public: {
     Tables: {
@@ -16,6 +15,7 @@ type Database = {
           reference: string;
         };
         Insert: {
+          id?: number;
           first_name: string;
           last_name: string;
           location: string;
@@ -24,17 +24,23 @@ type Database = {
           amount: number;
           reference: string;
         };
-        Update: Partial<{
-          first_name: string;
-          last_name: string;
-          location: string;
-          email: string;
-          package: string;
-          amount: number;
-          reference: string;
-        }>;
+        Update: {
+          id?: number;
+          first_name?: string;
+          last_name?: string;
+          location?: string;
+          email?: string;
+          package?: string;
+          amount?: number;
+          reference?: string;
+        };
+        Relationships: [];
       };
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 
 export default function Admin() {
@@ -10,9 +10,12 @@ export default function Admin() {
   const [data, setData] = useState<any[]>([]);
   const [filter, setFilter] = useState("");
 
-  // 🔐 CHECK AUTH (REAL LOGIN)
+  // 🔐 CHECK AUTH
   useEffect(() => {
     const checkUser = async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+
       const { data: userData } = await supabase.auth.getUser();
 
       if (!userData.user) {
@@ -21,11 +24,14 @@ export default function Admin() {
     };
 
     checkUser();
-  }, []);
+  }, [router]);
 
   // 📡 FETCH DATA
   useEffect(() => {
     const fetchData = async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+
       const { data, error } = await supabase
         .from("registrations")
         .select("*")
@@ -54,6 +60,9 @@ export default function Admin() {
   const deleteItem = async (id: number) => {
     const confirmDelete = confirm("Delete this registration?");
     if (!confirmDelete) return;
+
+    const supabase = getSupabase();
+    if (!supabase) return;
 
     await supabase.from("registrations").delete().eq("id", id);
 
@@ -91,7 +100,6 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-black text-white p-6 md:p-10">
-      
       {/* 🔝 HEADER */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8">
         <h1 className="text-3xl font-bold">Admin Dashboard</h1>
